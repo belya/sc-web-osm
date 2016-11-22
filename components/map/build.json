@@ -1,0 +1,15 @@
+{
+	"sources": 
+	[
+	"src/article.js",
+	"src/list.js",
+	"src/map.js",
+	"src/map_interface.js",
+	"src/question_line.js",
+	"src/timeline.js"    
+        ],
+	
+	"component": "src/map-component.js",
+
+	"target": "static/components/js/map/map.js"
+}
