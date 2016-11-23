@@ -6,10 +6,11 @@
 	"src/map.js",
 	"src/map_interface.js",
 	"src/question_line.js",
-	"src/timeline.js"    
+	"src/timeline.js",
+	"src/utils.js"    
         ],
 	
-	"component": "src/map-component.js",
+	"component": "src/map_component.js",
 
 	"target": "static/components/js/map/map.js"
 }
