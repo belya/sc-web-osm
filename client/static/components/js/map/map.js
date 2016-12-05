@@ -1,3 +1,65 @@
+/* --- src/keynodes.js --- */
+var MapKeynodes = {
+  
+}
+
+MapKeynodes.IDENTIFIERS = [
+  'concept_terrain_object',
+  'concept_building',
+  'nrel_geographical_location',
+  'nrel_WGS_84_translation',
+  'concept_coordinate', 
+  'nrel_WGS_84_translation',
+  'rrel_latitude',
+  'rrel_longitude',
+  'nrel_value',
+  'nrel_main_idtf',
+  'lang_ru',
+  'rrel_key_sc_element',
+  'sc_illustration',
+  'sc_definition',
+  'nrel_sc_text_translation',
+  'rrel_example',
+  'nrel_osm_query'
+];
+
+MapKeynodes.init = function() {
+  var deferred = $.Deferred();
+  var self = this;
+  SCWeb.core.Server.resolveScAddr(MapKeynodes.IDENTIFIERS, function (keynodes) {
+    self.keynodes = keynodes;
+    deferred.resolve();
+  });
+  return deferred;
+};
+
+
+MapKeynodes.get = function(identifier) {
+  return this.keynodes[identifier];
+};
+
+/* --- src/store.js --- */
+var MapStore = fluxify.createStore({
+  id: 'MapStore',
+  initialState: {
+    objects: [],
+    chosen: null
+  },
+  actionCallbacks: {
+    changeObject: function(updater, object) {
+      var objects = Object.assign({}, this.objects);
+      objects[object.id] = Object.assign({}, objects[object.id], object);
+      updater.set({objects: objects});
+    },
+    chooseObject: function(updater, object) {
+      updater.set({chosen: object})
+    },
+    resetChosen: function(updater) {
+      updater.set({chosen: null})
+    }
+  }
+});
+
 /* --- src/article.js --- */
 var Article = React.createClass({displayName: "Article",
   propTypes: {
@@ -32,18 +94,9 @@ var List = React.createClass({displayName: "List",
     onArticleClick: React.PropTypes.func,
   },
 
-  initReadmore: function() {
-    $(this.refs.list)
-    .find('.list-group-item-text')
-    .readmore({
-      collapsedHeight: 60,
-      moreLink: '<a href="#">Читать все</a>',
-      lessLink: '<a href="#">Скрыть</a>'
-    });
-  },
-
-  componentDidMount: function() {
-    this.initReadmore();
+  getDescription: function(object) {
+    if (object.description)
+      return object.description.slice(0, 100) + "...";
   },
 
   render: function() {
@@ -59,7 +112,7 @@ var List = React.createClass({displayName: "List",
                     React.createElement("img", {src: object.image, className: "img-thumbnail"})
                   ), 
                   React.createElement("div", {className: "col-sm-7"}, 
-                    React.createElement("p", {className: "list-group-item-text"}, object.description)
+                    React.createElement("p", {className: "list-group-item-text"}, this.getDescription(object))
                   )
                 )
               )
@@ -80,58 +133,60 @@ var Map = React.createClass({displayName: "Map",
     onMarkerClick: React.PropTypes.func,
   },
 
-  getInitialState: function() {
-    return {
-      map: null,
-      markers: []
-    }
-  },
-
   createMap: function() {
-    this.state.map = new L.Map('map', {zoomControl: false});
+    this.map = new L.Map('map', {zoomControl: false});
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    var osm = new L.TileLayer(osmUrl, {minZoom: 8, maxZoom: 20});
-    this.state.map.addLayer(osm);
+    var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 17});
+    this.map.addLayer(osm);
   },
 
   fixZoomControls: function() {
-    new L.control.zoom({position: 'bottomright'})
-      .addTo(this.state.map);
+    new L.control.zoom({position: 'bottomright'}).addTo(this.map);
   },
 
   clearMap: function() {
-    //TODO clear array
-    var map = this.state.map;
-    this.state.markers.map(function(marker) {
-      map.removeMarker(marker);
-    })
+    if (this.markers)
+      this.map.removeLayer(this.markers);
   },
 
   addMarkersToMap: function() {
-    var state = this.state;
+    var markers = [];
     var onMarkerClick = this.props.onMarkerClick;
     this.props.objects.map(function(object) {
-      var marker = new L.Marker([object.lat, object.lng])
-        .addTo(state.map)
-        .on('click', () => onMarkerClick(object));
-      state.map.setView(new L.LatLng(object.lat, object.lng), 18);
-      state.markers.push(marker);
-    })
+      if (object.geojson) {
+        var marker = L.geoJSON(object.geojson).on('click', () => onMarkerClick(object));
+        markers.push(marker);
+      }
+    });
+    if (markers.length > 0) {
+      this.markers = L.featureGroup(markers); 
+      this.markers.addTo(this.map);
+      this.map.fitBounds(this.markers.getBounds());
+    }
+  },
+
+  setInitialView: function() {
+    this.map.setView([53, 27], 1);
+  },
+
+  setCenter: function() {
+    if (this.props.chosen && this.props.chosen.geojson) 
+      this.map.fitBounds(L.geoJSON(this.props.chosen.geojson).getBounds());
   },
 
   componentDidMount: function() {
     this.createMap();
-    this.addMarkersToMap();
+    this.setInitialView();
     this.fixZoomControls();
   },
 
-  setCenter: function() {
-    if (this.props.chosen) 
-      this.state.map.setView(new L.LatLng(this.props.chosen.lat, this.props.chosen.lng), 18);
+  componentDidUpdate: function() {
+    this.clearMap();
+    this.addMarkersToMap();
+    this.setCenter();
   },
 
   render: function() {
-    this.setCenter();
     return (
       React.createElement("div", {id: "map", style: {position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}})
     );
@@ -142,37 +197,56 @@ var Map = React.createClass({displayName: "Map",
 /* --- src/map_interface.js --- */
 var MapInterface = React.createClass({displayName: "MapInterface",
   propTypes: {
-    objects: React.PropTypes.array,
     questions: React.PropTypes.array
   },
 
+  componentDidMount: function() {
+    this.initChosenListener();
+    this.initObjectsListener();
+  },
+
+  initChosenListener: function() {
+    MapStore.on('change:chosen', (chosen) => {
+      this.setState({chosen: chosen});
+    });
+  },
+
+  initObjectsListener: function() {
+    MapStore.on('change:objects', (objects) => {
+      this.setState({objects: Object.values(objects)});
+    });
+  },
+
   getInitialState: function() {
-    return {chosen: null};
+    return {
+      objects: MapStore.objects,
+      chosen: MapStore.chosen
+    };
   },
 
   onListClick: function() {
-    this.setState({chosen: null})
+    fluxify.doAction('resetChosen');
   },
 
   onClick: function(object) {
-    this.setState({chosen: object})
+    fluxify.doAction('chooseObject', object);
   },
 
-  onAgentParamsChange: function(time) {
-    console.log(time)
+  onAgentParamsChange: function(params) {
+    console.log(params)
   },
 
   createViewer: function() {
     if (this.state.chosen)
       return React.createElement(Article, {object: this.state.chosen, onListClick: this.onListClick})
     else
-      return React.createElement(List, {objects: this.props.objects, onArticleClick: this.onClick})
+      return React.createElement(List, {objects: this.state.objects, onArticleClick: this.onClick})
   },
 
   render: function() {
     return (
       React.createElement("div", null, 
-        React.createElement(Map, {objects: this.props.objects, chosen: this.state.chosen, onMarkerClick: this.onClick}), 
+        React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick}), 
         React.createElement("div", {className: "row", style: {margin: "10px"}}, 
           React.createElement("div", {className: "col-sm-5 well"}, 
             React.createElement("div", {className: "form-group"}, 
@@ -288,87 +362,228 @@ var Timeline = React.createClass({displayName: "Timeline",
 });
 
 
-/* --- src/map-component.js --- */
-Map.Component = {
-    ext_lang: 'openstreetmap_view',
-    formats: ['format_openstreetmap'],
-    struct_support: true,
-    factory: function(sandbox) {
-        var viewer = new MapViewer(sandbox);
-        viewer.init();
-        return viewer;
+/* --- src/utils.js --- */
+var MapUtils = {
+  extractor: function(contour, arc) {
+    return {
+      extract: function() {
+        window.sctpClient.get_arc(arc)
+        .done((nodes) => {
+          this.checkBuilding(nodes[1])
+          .done(() => {
+            this.extractIdentifier(nodes[1]);
+            this.extractDescription(nodes[1]);
+            this.extractImage(nodes[1]);
+            this.extractCoordinates(nodes[1]);
+          })
+        });
+      },
+      checkBuilding: function(object) {
+        var deferred = $.Deferred();
+        window.sctpClient.iterate_elements(SctpIteratorType.SCTP_ITERATOR_3F_A_F, [
+          MapKeynodes.get('concept_building'),
+          sc_type_arc_pos_const_perm,
+          object
+        ])
+        .done(function(array) {
+          if (array.length > 0)
+            deferred.resolve();
+          else
+            deferred.reject();
+        })
+        .fail(deferred.reject);
+        return deferred.promise();
+      },
+      extractIdentifier: function(object) {
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          object,
+                          sc_type_arc_common | sc_type_const,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_main_idtf")
+                        ], {"identifier": 2}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_3F_A_F,
+                        [
+                          MapKeynodes.get("lang_ru"),
+                          sc_type_arc_pos_const_perm,
+                          "identifier"
+                        ])
+        ).done(function(results) {            
+          window.sctpClient.get_link_content(results.get(0, "identifier"))
+          .done(function (title) {
+            fluxify.doAction('changeObject', {id: object, title: title});   
+          });
+        });
+      },
+      extractImage: function(object) {
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5A_A_F_A_F,
+                        [
+                          sc_type_node,
+                          sc_type_arc_pos_const_perm,
+                          object,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("rrel_key_sc_element")
+                        ], {"image_node": 0}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_3F_A_F,
+                        [
+                          MapKeynodes.get("sc_illustration"),
+                          sc_type_arc_pos_const_perm,
+                          "image_node"
+                        ]),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5A_A_F_A_F,
+                        [
+                          sc_type_node,
+                          sc_type_arc_common | sc_type_const,
+                          "image_node",
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_sc_text_translation")
+                        ], {"translation_node": 0}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          "translation_node",
+                          sc_type_arc_pos_const_perm,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("rrel_example")
+                        ], {"image": 2})
+        ).done(function(results) {            
+          var image = "api/link/content/?addr=" + results.get(0, "image");
+          fluxify.doAction('changeObject', {id: object, image: image});   
+        });
+      },
+      extractDescription: function(object) {
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5A_A_F_A_F,
+                        [
+                          sc_type_node,
+                          sc_type_arc_pos_const_perm,
+                          object,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("rrel_key_sc_element")
+                        ], {"description_node": 0}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_3F_A_F,
+                        [
+                          MapKeynodes.get("sc_definition"),
+                          sc_type_arc_pos_const_perm,
+                          "description_node"
+                        ]),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5A_A_F_A_F,
+                        [
+                          sc_type_node,
+                          sc_type_arc_common | sc_type_const,
+                          "description_node",
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_sc_text_translation")
+                        ], {"translation_node": 0}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          "translation_node",
+                          sc_type_arc_pos_const_perm,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("rrel_example")
+                        ], {"description": 2}),
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_3F_A_F,
+                        [
+                          MapKeynodes.get("lang_ru"),
+                          sc_type_arc_pos_const_perm,
+                          "description"
+                        ])
+        ).done(function(results) {            
+          window.sctpClient.get_link_content(results.get(0, "description"))
+          .done(function (description) {
+            fluxify.doAction('changeObject', {id: object, description: description});   
+          });
+        });
+      },
+      extractCoordinates: function(object) {
+        var self = this;
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          object,
+                          sc_type_arc_common | sc_type_const,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_osm_query")
+                        ], {"query": 2})
+        ).done(function(results) {
+          window.sctpClient.get_link_content(results.get(0, "query"))
+          .done((query) => {
+            self.extractGeoJSON(object, query);   
+          });
+        });
+      },
+      extractGeoJSON: function(id, query) {
+        $.ajax({
+          method: 'POST',
+          url: "http://overpass-api.de/api/interpreter",
+          data: {
+            data: this.getOSMQuery(query)
+          },
+          success: function(data) {
+            fluxify.doAction('changeObject', {id: id, geojson: osmtogeojson(data)});
+          }
+        })  
+      },
+      getOSMQuery: function(query) {
+        return '[out:json];(' + query + '); out body; >; out skel qt;'
+      }
     }
+  }
+}
+
+/* --- src/map_component.js --- */
+MapComponent = {
+  ext_lang: 'openstreetmap_view',
+  formats: ['format_openstreetmap'],
+  struct_support: true,
+  factory: function(sandbox) {
+    var viewer = new MapViewer(sandbox);
+    viewer.init();
+    return viewer;
+  }
 };
 
 MapViewer = function(sandbox) {
-    this.sandbox = sandbox;
+  this.sandbox = sandbox;
 };
 
 MapViewer.prototype.init = function() {
-    this.initCallback();
-    this.createReactComponent();
-    this.sandbox.updateContent();
+  var self = this;
+  MapKeynodes.init().done(function() {
+    self.initCallback();
+    self.createReactComponent();
+    self.sandbox.updateContent();
+  });
 };
 
 MapViewer.prototype.initCallback = function() {
-    this.sandbox.eventDataAppend = $.proxy(this.receiveData, this);
+  this.sandbox.eventStructUpdate = $.proxy(this.eventStructUpdate, this);
 }
 
 MapViewer.prototype.createReactComponent = function() {
-    var mapInterface = React.createElement(MapInterface, {objects: this.getObjects(), questions: this.getQuestions()});
-    ReactDOM.render(mapInterface, document.getElementById(this.sandbox.container));
+  var mapInterface = React.createElement(MapInterface, {questions: this.getQuestions()});
+  ReactDOM.render(mapInterface, document.getElementById(this.sandbox.container));
 }
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
-    var deferred = new jQuery.Deferred();
-    //TODO receive json from KB
-    deferred.resolve();
-    return deferred.promise();
-};
-
-MapViewer.prototype.getObjects = function() {
-    return [
-      {
-        "title": "Здание мужского базилианского монастыря",
-        "image": "http://farm3.static.flickr.com/2153/2842876054_ea95f1ab31_o.jpg",
-        "description": "Корпус мужского базилианского монастыря начал строиться в 1617 году и принадлежал ордену униатов. В 1795 году униатские монастыри были закрыты, а в здании разместилась Минская мужская гимназия и Присутственные места.",
-        "lat": 53.903, 
-        "lng": 27.557
-      }, 
-      {
-        "title": "Здание женского базилианского монастыря",
-        "image": "http://minsk-old-new.com/Image/exkursia/x-051-Muzic-School-1.jpg",
-        "description": "Строительство здания началось в 1641 году по фундации трокской кастелянши Зузаны Гансевской. Во время его строительства были использованы подвалы и стены тех жилых зданий, которые находились на этом месте ранее. В здании располагался монастырь Святого духа базилианок.",
-        "lat": 53.90373, 
-        "lng": 27.55768
-      },
-      {
-        "title": "Здание Минского железнодорожного вокзала",
-        "image": "http://history.rw.by/uploads/stations/1300x550_tt/minsk_sh.jpg",
-        "description": "Минск-Пассажирский — пассажирский железнодорожный терминал, расположенный в столице Белоруссии Минске. Главный железнодорожный вокзал города.",
-        "lat": 53.890572, 
-        "lng": 27.550837
-      },
-      {
-        "title": "Дом Монюшко",
-        "image": "http://problr.by/assets/components/phpthumbof/cache/43900cd9a6686a1a1c1bd735627ed5bd.5404702a2b75d3bc16912ae5f4655747.jpg",
-        "description": "Здание было построено в 1797 году. В 20-х годах XIXвека дом принадлежал Климкевичу, а в начале XXвека – М. Френкелю. Первоначально здание было двухэтажным. Третий этаж был пристроен в начале XXвека.",
-        "lat": 53.903776, 
-        "lng": 27.558306
-      }
-    ]
+  if (added) MapUtils.extractor(contour, arc).extract();
 };
 
 MapViewer.prototype.getQuestions = function() {
-    return [
-      "Как выглядел объект в 2016 году?",
-      "Какая организация здесь располагается?",
-      "Какие здания находятся в радиусе 1000м?",
-      "Как сюда пройти?"
-    ]
+  return [
+    "Как выглядел объект в 2016 году?",
+    "Какая организация здесь располагается?",
+    "Какие здания находятся в радиусе 1000м?",
+    "Как сюда пройти?"
+  ]
 };
 
 
-SCWeb.core.ComponentManager.appendComponentInitialize(Map.Component);
+SCWeb.core.ComponentManager.appendComponentInitialize(MapComponent);
 
 

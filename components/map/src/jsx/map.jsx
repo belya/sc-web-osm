@@ -8,7 +8,7 @@ var Map = React.createClass({
   createMap: function() {
     this.map = new L.Map('map', {zoomControl: false});
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    var osm = new L.TileLayer(osmUrl, {minZoom: 8, maxZoom: 17});
+    var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 17});
     this.map.addLayer(osm);
   },
 
@@ -17,7 +17,8 @@ var Map = React.createClass({
   },
 
   clearMap: function() {
-    this.map.removeLayer(this.markers);
+    if (this.markers)
+      this.map.removeLayer(this.markers);
   },
 
   addMarkersToMap: function() {
@@ -29,15 +30,15 @@ var Map = React.createClass({
         markers.push(marker);
       }
     });
-    this.markers = L.featureGroup(markers); 
-    this.markers.addTo(this.map);
-    this.map.fitBounds(this.markers.getBounds());
+    if (markers.length > 0) {
+      this.markers = L.featureGroup(markers); 
+      this.markers.addTo(this.map);
+      this.map.fitBounds(this.markers.getBounds());
+    }
   },
 
-  componentDidMount: function() {
-    this.createMap();
-    this.addMarkersToMap();
-    this.fixZoomControls();
+  setInitialView: function() {
+    this.map.setView([53, 27], 1);
   },
 
   setCenter: function() {
@@ -45,8 +46,19 @@ var Map = React.createClass({
       this.map.fitBounds(L.geoJSON(this.props.chosen.geojson).getBounds());
   },
 
-  render: function() {
+  componentDidMount: function() {
+    this.createMap();
+    this.setInitialView();
+    this.fixZoomControls();
+  },
+
+  componentDidUpdate: function() {
+    this.clearMap();
+    this.addMarkersToMap();
     this.setCenter();
+  },
+
+  render: function() {
     return (
       <div id="map" style={{position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}}></div>
     );

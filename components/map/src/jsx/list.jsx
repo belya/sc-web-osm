@@ -4,18 +4,9 @@ var List = React.createClass({
     onArticleClick: React.PropTypes.func,
   },
 
-  initReadmore: function() {
-    $(this.refs.list)
-    .find('.list-group-item-text')
-    .readmore({
-      collapsedHeight: 60,
-      moreLink: '<a href="#">Читать все</a>',
-      lessLink: '<a href="#">Скрыть</a>'
-    });
-  },
-
-  componentDidMount: function() {
-    this.initReadmore();
+  getDescription: function(object) {
+    if (object.description)
+      return object.description.slice(0, 100) + "...";
   },
 
   render: function() {
@@ -31,7 +22,7 @@ var List = React.createClass({
                     <img src={object.image} className="img-thumbnail"></img>
                   </div>
                   <div className="col-sm-7">
-                    <p className="list-group-item-text">{object.description}</p>
+                    <p className="list-group-item-text">{this.getDescription(object)}</p>
                   </div>
                 </div>
               </a>

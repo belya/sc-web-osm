@@ -1,6 +1,8 @@
 {
 	"sources": 
 	[
+	"src/keynodes.js",
+	"src/store.js",
 	"src/article.js",
 	"src/list.js",
 	"src/map.js",
