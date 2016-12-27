@@ -3,15 +3,6 @@ var MapKeynodes = {
 }
 
 MapKeynodes.IDENTIFIERS = [
-  'concept_terrain_object',
-  'concept_building',
-  'nrel_geographical_location',
-  'nrel_WGS_84_translation',
-  'concept_coordinate', 
-  'nrel_WGS_84_translation',
-  'rrel_latitude',
-  'rrel_longitude',
-  'nrel_value',
   'nrel_main_idtf',
   'lang_ru',
   'rrel_key_sc_element',
@@ -19,7 +10,8 @@ MapKeynodes.IDENTIFIERS = [
   'sc_definition',
   'nrel_sc_text_translation',
   'rrel_example',
-  'nrel_osm_query'
+  'nrel_osm_query',
+  'ui_menu_file_for_finding_persons'
 ];
 
 MapKeynodes.init = function() {

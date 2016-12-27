@@ -1,6 +1,7 @@
 var MapInterface = React.createClass({
   propTypes: {
-    questions: React.PropTypes.array
+    questions: React.PropTypes.array,
+    store: React.PropTypes.object
   },
 
   componentDidMount: function() {
@@ -9,21 +10,21 @@ var MapInterface = React.createClass({
   },
 
   initChosenListener: function() {
-    MapStore.on('change:chosen', (chosen) => {
+    this.props.store.on('change:chosen', (chosen) => {
       this.setState({chosen: chosen});
     });
   },
 
   initObjectsListener: function() {
-    MapStore.on('change:objects', (objects) => {
+    this.props.store.on('change:objects', (objects) => {
       this.setState({objects: Object.values(objects)});
     });
   },
 
   getInitialState: function() {
     return {
-      objects: MapStore.objects,
-      chosen: MapStore.chosen
+      objects: this.props.store.objects,
+      chosen: this.props.store.chosen
     };
   },
 
@@ -35,8 +36,9 @@ var MapInterface = React.createClass({
     fluxify.doAction('chooseObject', object);
   },
 
+  //TODO remove hard-coded question
   onAgentParamsChange: function(params) {
-    console.log(params)
+    SCWeb.core.Main.doCommand(MapKeynodes.get('ui_menu_file_for_finding_persons'), [this.state.chosen.id]);
   },
 
   createViewer: function() {

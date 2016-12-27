@@ -4,15 +4,6 @@ var MapKeynodes = {
 }
 
 MapKeynodes.IDENTIFIERS = [
-  'concept_terrain_object',
-  'concept_building',
-  'nrel_geographical_location',
-  'nrel_WGS_84_translation',
-  'concept_coordinate', 
-  'nrel_WGS_84_translation',
-  'rrel_latitude',
-  'rrel_longitude',
-  'nrel_value',
   'nrel_main_idtf',
   'lang_ru',
   'rrel_key_sc_element',
@@ -20,7 +11,8 @@ MapKeynodes.IDENTIFIERS = [
   'sc_definition',
   'nrel_sc_text_translation',
   'rrel_example',
-  'nrel_osm_query'
+  'nrel_osm_query',
+  'ui_menu_file_for_finding_persons'
 ];
 
 MapKeynodes.init = function() {
@@ -39,26 +31,39 @@ MapKeynodes.get = function(identifier) {
 };
 
 /* --- src/store.js --- */
-var MapStore = fluxify.createStore({
-  id: 'MapStore',
-  initialState: {
-    objects: [],
-    chosen: null
+MapStore = {
+  create: function() {
+    return fluxify.createStore({
+      id: this.generateId(),
+      initialState: {
+        objects: [],
+        chosen: null
+      },
+      actionCallbacks: {
+        changeObject: function(updater, object) {
+          var objects = Object.assign({}, this.objects);
+          objects[object.id] = Object.assign({}, objects[object.id], object);
+          updater.set({objects: objects});
+        },
+        chooseObject: function(updater, object) {
+          updater.set({chosen: object})
+        },
+        resetChosen: function(updater) {
+          updater.set({chosen: null})
+        }
+      }
+    });
   },
-  actionCallbacks: {
-    changeObject: function(updater, object) {
-      var objects = Object.assign({}, this.objects);
-      objects[object.id] = Object.assign({}, objects[object.id], object);
-      updater.set({objects: objects});
-    },
-    chooseObject: function(updater, object) {
-      updater.set({chosen: object})
-    },
-    resetChosen: function(updater) {
-      updater.set({chosen: null})
-    }
+
+  generateId: function() {
+    var text = "MapStore";
+    
+    for( var i=0; i < 10; i++ )
+        text += Math.floor(Math.random() * 15).toString(16);
+
+    return text;
   }
-});
+}
 
 /* --- src/article.js --- */
 var Article = React.createClass({displayName: "Article",
@@ -67,17 +72,27 @@ var Article = React.createClass({displayName: "Article",
     onListClick: React.PropTypes.func
   },
 
+  doDefaultCommand: function() {
+    SCWeb.core.Main.doDefaultCommand([this.props.object.id]);
+  },
+
+  appendArgument: function() {
+    SCWeb.core.Arguments.appendArgument(this.props.object.id);
+  },
+
   render: function() {
     return (
       React.createElement("div", {className: "panel panel-default"}, 
         React.createElement("div", {className: "panel-body", style: {overflowY: "auto", maxHeight: "300px"}}, 
-          React.createElement("h4", null, this.props.object.title), 
+          React.createElement("h4", {onClick: this.appendArgument, style: {cursor: "pointer"}}, 
+            this.props.object.title
+          ), 
           React.createElement("img", {src: this.props.object.image, className: "img-thumbnail"}), 
           React.createElement("p", {className: "list-group-item-text"}, this.props.object.description)
         ), 
         React.createElement("div", {className: "panel-footer"}, 
           React.createElement("ul", {className: "nav nav-pills"}, 
-            React.createElement("li", {className: "active"}, React.createElement("a", {href: "#"}, "Перейти к статье")), 
+            React.createElement("li", {className: "active"}, React.createElement("a", {href: "#", onClick: this.doDefaultCommand}, "Перейти к статье")), 
             React.createElement("li", null, React.createElement("a", {href: "#", onClick: this.props.onListClick}, "Назад"))
           )
         )
@@ -99,6 +114,11 @@ var List = React.createClass({displayName: "List",
       return object.description.slice(0, 100) + "...";
   },
 
+  getPreview: function(object) {
+    if (object.image)
+      return React.createElement("img", {src: object.image, className: "img-thumbnail"})
+  },
+
   render: function() {
     return (
       React.createElement("div", {className: "list-group", ref: "list", style: {overflowY: "auto", maxHeight: "300px"}}, 
@@ -109,7 +129,7 @@ var List = React.createClass({displayName: "List",
                 React.createElement("h4", {className: "list-group-item-heading"}, object.title), 
                 React.createElement("div", {className: "row"}, 
                   React.createElement("div", {className: "col-sm-5"}, 
-                    React.createElement("img", {src: object.image, className: "img-thumbnail"})
+                    this.getPreview(object)
                   ), 
                   React.createElement("div", {className: "col-sm-7"}, 
                     React.createElement("p", {className: "list-group-item-text"}, this.getDescription(object))
@@ -197,7 +217,8 @@ var Map = React.createClass({displayName: "Map",
 /* --- src/map_interface.js --- */
 var MapInterface = React.createClass({displayName: "MapInterface",
   propTypes: {
-    questions: React.PropTypes.array
+    questions: React.PropTypes.array,
+    store: React.PropTypes.object
   },
 
   componentDidMount: function() {
@@ -206,21 +227,21 @@ var MapInterface = React.createClass({displayName: "MapInterface",
   },
 
   initChosenListener: function() {
-    MapStore.on('change:chosen', (chosen) => {
+    this.props.store.on('change:chosen', (chosen) => {
       this.setState({chosen: chosen});
     });
   },
 
   initObjectsListener: function() {
-    MapStore.on('change:objects', (objects) => {
+    this.props.store.on('change:objects', (objects) => {
       this.setState({objects: Object.values(objects)});
     });
   },
 
   getInitialState: function() {
     return {
-      objects: MapStore.objects,
-      chosen: MapStore.chosen
+      objects: this.props.store.objects,
+      chosen: this.props.store.chosen
     };
   },
 
@@ -232,8 +253,9 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     fluxify.doAction('chooseObject', object);
   },
 
+  //TODO remove hard-coded question
   onAgentParamsChange: function(params) {
-    console.log(params)
+    SCWeb.core.Main.doCommand(MapKeynodes.get('ui_menu_file_for_finding_persons'), [this.state.chosen.id]);
   },
 
   createViewer: function() {
@@ -369,7 +391,7 @@ var MapUtils = {
       extract: function() {
         window.sctpClient.get_arc(arc)
         .done((nodes) => {
-          this.checkBuilding(nodes[1])
+          this.checkTerrainObject(nodes[1])
           .done(() => {
             this.extractIdentifier(nodes[1]);
             this.extractDescription(nodes[1]);
@@ -378,15 +400,19 @@ var MapUtils = {
           })
         });
       },
-      checkBuilding: function(object) {
+      checkTerrainObject: function(object) {
         var deferred = $.Deferred();
-        window.sctpClient.iterate_elements(SctpIteratorType.SCTP_ITERATOR_3F_A_F, [
-          MapKeynodes.get('concept_building'),
-          sc_type_arc_pos_const_perm,
-          object
-        ])
-        .done(function(array) {
-          if (array.length > 0)
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          object,
+                          sc_type_arc_common | sc_type_const,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_osm_query")
+                        ])
+        ).done(function(results) {
+          if (results.exist())
             deferred.resolve();
           else
             deferred.reject();
@@ -530,7 +556,9 @@ var MapUtils = {
         })  
       },
       getOSMQuery: function(query) {
-        return '[out:json];(' + query + '); out body; >; out skel qt;'
+        if (/\[out:json\];/.test(query)) return query;
+        if (/\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
+        return '[out:json];(' + query + '); out body; >; out skel qt;';
       }
     }
   }
@@ -539,7 +567,7 @@ var MapUtils = {
 /* --- src/map_component.js --- */
 MapComponent = {
   ext_lang: 'openstreetmap_view',
-  formats: ['format_openstreetmap'],
+  formats: ['format_openstreetmap_view'],
   struct_support: true,
   factory: function(sandbox) {
     var viewer = new MapViewer(sandbox);
@@ -566,9 +594,14 @@ MapViewer.prototype.initCallback = function() {
 }
 
 MapViewer.prototype.createReactComponent = function() {
-  var mapInterface = React.createElement(MapInterface, {questions: this.getQuestions()});
+  var store = this.createStore();
+  var mapInterface = React.createElement(MapInterface, {store: store, questions: this.getQuestions()});
   ReactDOM.render(mapInterface, document.getElementById(this.sandbox.container));
 }
+
+MapViewer.prototype.createStore = function() {
+  return MapStore.create();
+};
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
   if (added) MapUtils.extractor(contour, arc).extract();
@@ -576,10 +609,7 @@ MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
 
 MapViewer.prototype.getQuestions = function() {
   return [
-    "Как выглядел объект в 2016 году?",
-    "Какая организация здесь располагается?",
-    "Какие здания находятся в радиусе 1000м?",
-    "Как сюда пройти?"
+    "С какими персонами связано здание?",
   ]
 };
 

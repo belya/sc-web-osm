@@ -1,6 +1,6 @@
 MapComponent = {
   ext_lang: 'openstreetmap_view',
-  formats: ['format_openstreetmap'],
+  formats: ['format_openstreetmap_view'],
   struct_support: true,
   factory: function(sandbox) {
     var viewer = new MapViewer(sandbox);
@@ -27,9 +27,14 @@ MapViewer.prototype.initCallback = function() {
 }
 
 MapViewer.prototype.createReactComponent = function() {
-  var mapInterface = React.createElement(MapInterface, {questions: this.getQuestions()});
+  var store = this.createStore();
+  var mapInterface = React.createElement(MapInterface, {store: store, questions: this.getQuestions()});
   ReactDOM.render(mapInterface, document.getElementById(this.sandbox.container));
 }
+
+MapViewer.prototype.createStore = function() {
+  return MapStore.create();
+};
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
   if (added) MapUtils.extractor(contour, arc).extract();
@@ -37,10 +42,7 @@ MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
 
 MapViewer.prototype.getQuestions = function() {
   return [
-    "Как выглядел объект в 2016 году?",
-    "Какая организация здесь располагается?",
-    "Какие здания находятся в радиусе 1000м?",
-    "Как сюда пройти?"
+    "С какими персонами связано здание?",
   ]
 };
 

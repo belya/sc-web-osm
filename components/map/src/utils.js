@@ -4,7 +4,7 @@ var MapUtils = {
       extract: function() {
         window.sctpClient.get_arc(arc)
         .done((nodes) => {
-          this.checkBuilding(nodes[1])
+          this.checkTerrainObject(nodes[1])
           .done(() => {
             this.extractIdentifier(nodes[1]);
             this.extractDescription(nodes[1]);
@@ -13,15 +13,19 @@ var MapUtils = {
           })
         });
       },
-      checkBuilding: function(object) {
+      checkTerrainObject: function(object) {
         var deferred = $.Deferred();
-        window.sctpClient.iterate_elements(SctpIteratorType.SCTP_ITERATOR_3F_A_F, [
-          MapKeynodes.get('concept_building'),
-          sc_type_arc_pos_const_perm,
-          object
-        ])
-        .done(function(array) {
-          if (array.length > 0)
+        window.sctpClient.iterate_constr(
+          SctpConstrIter(SctpIteratorType.SCTP_ITERATOR_5F_A_A_A_F,
+                        [
+                          object,
+                          sc_type_arc_common | sc_type_const,
+                          sc_type_link,
+                          sc_type_arc_pos_const_perm,
+                          MapKeynodes.get("nrel_osm_query")
+                        ])
+        ).done(function(results) {
+          if (results.exist())
             deferred.resolve();
           else
             deferred.reject();
@@ -165,7 +169,9 @@ var MapUtils = {
         })  
       },
       getOSMQuery: function(query) {
-        return '[out:json];(' + query + '); out body; >; out skel qt;'
+        if (/\[out:json\];/.test(query)) return query;
+        if (/\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
+        return '[out:json];(' + query + '); out body; >; out skel qt;';
       }
     }
   }

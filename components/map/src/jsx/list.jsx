@@ -9,6 +9,11 @@ var List = React.createClass({
       return object.description.slice(0, 100) + "...";
   },
 
+  getPreview: function(object) {
+    if (object.image)
+      return <img src={object.image} className="img-thumbnail"></img>
+  },
+
   render: function() {
     return (
       <div className="list-group" ref="list" style={{overflowY: "auto", maxHeight: "300px"}}>
@@ -19,7 +24,7 @@ var List = React.createClass({
                 <h4 className="list-group-item-heading">{object.title}</h4>
                 <div className="row">
                   <div className="col-sm-5">
-                    <img src={object.image} className="img-thumbnail"></img>
+                    {this.getPreview(object)}
                   </div>
                   <div className="col-sm-7">
                     <p className="list-group-item-text">{this.getDescription(object)}</p>
