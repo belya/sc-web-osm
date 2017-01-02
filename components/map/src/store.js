@@ -8,7 +8,7 @@ MapStore = {
     return fluxify.createStore({
       id: "MapStore",
       initialState: {
-        objects: [],
+        objects: {},
         chosen: null
       },
       actionCallbacks: {
@@ -18,7 +18,7 @@ MapStore = {
           updater.set({objects: objects});
         },
         clean: function(updater) {
-          updater.set({objects: [], chosen: null});
+          updater.set({objects: {}, chosen: null});
         },
         chooseObject: function(updater, object) {
           updater.set({chosen: object})

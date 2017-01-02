@@ -28,7 +28,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
 
   getInitialState: function() {
     return {
-      objects: this.props.store.objects,
+      objects: Object.values(this.props.store.objects),
       chosen: this.props.store.chosen
     };
   },

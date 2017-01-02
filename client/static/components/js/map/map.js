@@ -41,7 +41,7 @@ MapStore = {
     return fluxify.createStore({
       id: "MapStore",
       initialState: {
-        objects: [],
+        objects: {},
         chosen: null
       },
       actionCallbacks: {
@@ -51,7 +51,7 @@ MapStore = {
           updater.set({objects: objects});
         },
         clean: function(updater) {
-          updater.set({objects: [], chosen: null});
+          updater.set({objects: {}, chosen: null});
         },
         chooseObject: function(updater, object) {
           updater.set({chosen: object})
@@ -244,7 +244,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
 
   getInitialState: function() {
     return {
-      objects: this.props.store.objects,
+      objects: Object.values(this.props.store.objects),
       chosen: this.props.store.chosen
     };
   },
@@ -391,7 +391,6 @@ var Timeline = React.createClass({displayName: "Timeline",
 /* --- src/utils.js --- */
 var MapUtils = {
   empty: function(geojson) {
-    console.log(geojson);
     return !geojson || !geojson.features || !geojson.features.length;
   },
   extractor: function(contour, arc) {
