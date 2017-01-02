@@ -51,7 +51,7 @@ MapStore = {
           updater.set({objects: objects});
         },
         clean: function(updater) {
-          updater.set({objects: {}, chosen: null});
+          updater.set({objects: [], chosen: null});
         },
         chooseObject: function(updater, object) {
           updater.set({chosen: object})
@@ -172,7 +172,7 @@ var Map = React.createClass({displayName: "Map",
     var markers = [];
     var onMarkerClick = this.props.onMarkerClick;
     this.props.objects.map(function(object) {
-      if (object.geojson) {
+      if (!MapUtils.empty(object.geojson)) {
         var marker = L.geoJSON(object.geojson).on('click', () => onMarkerClick(object));
         markers.push(marker);
       }
@@ -189,7 +189,7 @@ var Map = React.createClass({displayName: "Map",
   },
 
   setCenter: function() {
-    if (this.props.chosen && this.props.chosen.geojson) 
+    if (this.props.chosen && !MapUtils.empty(this.props.chosen.geojson))
       this.map.fitBounds(L.geoJSON(this.props.chosen.geojson).getBounds());
   },
 
@@ -390,6 +390,10 @@ var Timeline = React.createClass({displayName: "Timeline",
 
 /* --- src/utils.js --- */
 var MapUtils = {
+  empty: function(geojson) {
+    console.log(geojson);
+    return !geojson || !geojson.features || !geojson.features.length;
+  },
   extractor: function(contour, arc) {
     return {
       extract: function() {

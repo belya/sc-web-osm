@@ -1,4 +1,7 @@
 var MapUtils = {
+  empty: function(geojson) {
+    return !geojson || !geojson.features || !geojson.features.length;
+  },
   extractor: function(contour, arc) {
     return {
       extract: function() {
