@@ -1,7 +1,12 @@
 MapStore = {
+  get: function() {
+    this.store = this.store || this.create();
+    return this.store;
+  },
+
   create: function() {
     return fluxify.createStore({
-      id: this.generateId(),
+      id: "MapStore",
       initialState: {
         objects: [],
         chosen: null
@@ -12,6 +17,9 @@ MapStore = {
           objects[object.id] = Object.assign({}, objects[object.id], object);
           updater.set({objects: objects});
         },
+        clean: function(updater) {
+          updater.set({objects: {}, chosen: null});
+        },
         chooseObject: function(updater, object) {
           updater.set({chosen: object})
         },
@@ -20,14 +28,5 @@ MapStore = {
         }
       }
     });
-  },
-
-  generateId: function() {
-    var text = "MapStore";
-    
-    for( var i=0; i < 10; i++ )
-        text += Math.floor(Math.random() * 15).toString(16);
-
-    return text;
   }
 }

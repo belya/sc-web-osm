@@ -33,7 +33,7 @@ MapViewer.prototype.createReactComponent = function() {
 }
 
 MapViewer.prototype.createStore = function() {
-  return MapStore.create();
+  return MapStore.get();
 };
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {

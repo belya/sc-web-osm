@@ -5,8 +5,13 @@ var MapInterface = React.createClass({displayName: "MapInterface",
   },
 
   componentDidMount: function() {
+    this.cleanModel();
     this.initChosenListener();
     this.initObjectsListener();
+  },
+
+  cleanModel: function() {
+    fluxify.doAction('clean');
   },
 
   initChosenListener: function() {
