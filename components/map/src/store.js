@@ -10,7 +10,8 @@ MapStore = {
       initialState: {
         objects: {},
         chosen: null,
-        contour: null
+        contour: null,
+        loaded: true
       },
       actionCallbacks: {
         importObject: function(updater, coordinates) {
@@ -33,6 +34,9 @@ MapStore = {
         },
         changeContour: function(updater, contour) {
           updater.set({contour: contour})
+        },
+        setLoadState: function(updater, loaded) {
+          updater.set({loaded: loaded})
         }
       }
     });

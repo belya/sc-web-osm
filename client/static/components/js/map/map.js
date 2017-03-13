@@ -43,7 +43,8 @@ MapStore = {
       initialState: {
         objects: {},
         chosen: null,
-        contour: null
+        contour: null,
+        loaded: true
       },
       actionCallbacks: {
         importObject: function(updater, coordinates) {
@@ -66,6 +67,9 @@ MapStore = {
         },
         changeContour: function(updater, contour) {
           updater.set({contour: contour})
+        },
+        setLoadState: function(updater, loaded) {
+          updater.set({loaded: loaded})
         }
       }
     });
@@ -161,6 +165,16 @@ var Map = React.createClass({displayName: "Map",
     onMapClick: React.PropTypes.func
   },
 
+  initCursorListener: function() {
+    document.body.addEventListener('keydown', (event) => {
+      if (event.ctrlKey)
+        this.refs.map.style.cursor = "crosshair";
+    });
+    document.body.addEventListener('keyup', () => {
+      this.refs.map.style.cursor = "";
+    });
+  },
+
   createMap: function() {
     this.map = new L.Map('map', {zoomControl: false});
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -214,6 +228,7 @@ var Map = React.createClass({displayName: "Map",
     this.bindMapClickAction();
     this.setInitialView();
     this.fixZoomControls();
+    this.initCursorListener();
   },
 
   componentDidUpdate: function() {
@@ -224,7 +239,7 @@ var Map = React.createClass({displayName: "Map",
 
   render: function() {
     return (
-      React.createElement("div", {id: "map", style: {position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}})
+      React.createElement("div", {id: "map", ref: "map", style: {position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}})
     );
   }
 });
@@ -241,6 +256,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     this.cleanModel();
     this.initChosenListener();
     this.initObjectsListener();
+    this.initLoadedListener();
   },
 
   cleanModel: function() {
@@ -259,10 +275,17 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     });
   },
 
+  initLoadedListener: function() {
+    this.props.store.on('change:loaded', (loaded) => {
+      this.setState({loaded: loaded});
+    });
+  },
+
   getInitialState: function() {
     return {
       objects: Object.values(this.props.store.objects),
-      chosen: this.props.store.chosen
+      chosen: this.props.store.chosen,
+      loaded: this.props.store.loaded
     };
   },
 
@@ -292,7 +315,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
 
   render: function() {
     return (
-      React.createElement("div", null, 
+      React.createElement(Loader, {loaded: this.state.loaded}, 
         React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick, onMapClick: this.onMapClick}), 
         React.createElement("div", {className: "row", style: {margin: "10px"}}, 
           React.createElement("div", {className: "col-sm-5 well"}, 
@@ -450,7 +473,8 @@ var MapUtils = {
       import: function() {
         MapUtils.doOSMQuery(MapUtils.getOSMQueryForCoordinates(coordinates), (data) => {
           data.elements.map((element) => {
-            this.createNode(element);            
+            if (element["tags"] && element["tags"]["name"])
+              this.createNode(element);
           });
         });
       },
@@ -468,27 +492,27 @@ var MapUtils = {
           })
         });
       },
+      showModal: function(element) {
+        $.toast(element["tags"]["name"] + " добавлен на карту");
+      },
       importIdentifier: function(element) {
         var deferred = $.Deferred();
-        if (!element["tags"] || !element["tags"]["name"]) 
-          deferred.resolve()
-        else
-          window.sctpClient.create_link()
-          .done((link) => {
-            window.sctpClient.set_link_content(link, element["tags"]["name"])
-            .done(() => {
-              window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
-              .done((arc) => {
-                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+        window.sctpClient.create_link()
+        .done((link) => {
+          window.sctpClient.set_link_content(link, element["tags"]["name"])
+          .done(() => {
+            window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+            .done((arc) => {
+              window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+              .done(() => {
+                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
                 .done(() => {
-                  window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
-                  .done(() => {
-                    deferred.resolve();
-                  }).fail(deferred.reject)
+                  deferred.resolve();
                 }).fail(deferred.reject)
               }).fail(deferred.reject)
             }).fail(deferred.reject)
-          }).fail(deferred.reject);
+          }).fail(deferred.reject)
+        }).fail(deferred.reject);
         return deferred.promise();
       },
       importQuery: function(element) {
@@ -513,7 +537,7 @@ var MapUtils = {
         console.log(element["ostisId"]);
         window.sctpClient.create_arc(sc_type_arc_pos_const_perm, contour, element["ostisId"])
         .done(() => {
-          console.log("Added");
+          this.showModal(element);
         })
         .fail(() => {
           console.log("Can't add!");

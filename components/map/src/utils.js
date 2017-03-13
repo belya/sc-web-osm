@@ -38,7 +38,8 @@ var MapUtils = {
       import: function() {
         MapUtils.doOSMQuery(MapUtils.getOSMQueryForCoordinates(coordinates), (data) => {
           data.elements.map((element) => {
-            this.createNode(element);            
+            if (element["tags"] && element["tags"]["name"])
+              this.createNode(element);
           });
         });
       },
@@ -56,27 +57,27 @@ var MapUtils = {
           })
         });
       },
+      showModal: function(element) {
+        $.toast(element["tags"]["name"] + " добавлен на карту");
+      },
       importIdentifier: function(element) {
         var deferred = $.Deferred();
-        if (!element["tags"] || !element["tags"]["name"]) 
-          deferred.resolve()
-        else
-          window.sctpClient.create_link()
-          .done((link) => {
-            window.sctpClient.set_link_content(link, element["tags"]["name"])
-            .done(() => {
-              window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
-              .done((arc) => {
-                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+        window.sctpClient.create_link()
+        .done((link) => {
+          window.sctpClient.set_link_content(link, element["tags"]["name"])
+          .done(() => {
+            window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+            .done((arc) => {
+              window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+              .done(() => {
+                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
                 .done(() => {
-                  window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
-                  .done(() => {
-                    deferred.resolve();
-                  }).fail(deferred.reject)
+                  deferred.resolve();
                 }).fail(deferred.reject)
               }).fail(deferred.reject)
             }).fail(deferred.reject)
-          }).fail(deferred.reject);
+          }).fail(deferred.reject)
+        }).fail(deferred.reject);
         return deferred.promise();
       },
       importQuery: function(element) {
@@ -101,7 +102,7 @@ var MapUtils = {
         console.log(element["ostisId"]);
         window.sctpClient.create_arc(sc_type_arc_pos_const_perm, contour, element["ostisId"])
         .done(() => {
-          console.log("Added");
+          this.showModal(element);
         })
         .fail(() => {
           console.log("Can't add!");

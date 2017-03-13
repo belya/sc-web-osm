@@ -8,6 +8,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     this.cleanModel();
     this.initChosenListener();
     this.initObjectsListener();
+    this.initLoadedListener();
   },
 
   cleanModel: function() {
@@ -26,10 +27,17 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     });
   },
 
+  initLoadedListener: function() {
+    this.props.store.on('change:loaded', (loaded) => {
+      this.setState({loaded: loaded});
+    });
+  },
+
   getInitialState: function() {
     return {
       objects: Object.values(this.props.store.objects),
-      chosen: this.props.store.chosen
+      chosen: this.props.store.chosen,
+      loaded: this.props.store.loaded
     };
   },
 
@@ -59,7 +67,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
 
   render: function() {
     return (
-      React.createElement("div", null, 
+      React.createElement(Loader, {loaded: this.state.loaded}, 
         React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick, onMapClick: this.onMapClick}), 
         React.createElement("div", {className: "row", style: {margin: "10px"}}, 
           React.createElement("div", {className: "col-sm-5 well"}, 

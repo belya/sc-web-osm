@@ -6,6 +6,16 @@ var Map = React.createClass({displayName: "Map",
     onMapClick: React.PropTypes.func
   },
 
+  initCursorListener: function() {
+    document.body.addEventListener('keydown', (event) => {
+      if (event.ctrlKey)
+        this.refs.map.style.cursor = "crosshair";
+    });
+    document.body.addEventListener('keyup', () => {
+      this.refs.map.style.cursor = "";
+    });
+  },
+
   createMap: function() {
     this.map = new L.Map('map', {zoomControl: false});
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -59,6 +69,7 @@ var Map = React.createClass({displayName: "Map",
     this.bindMapClickAction();
     this.setInitialView();
     this.fixZoomControls();
+    this.initCursorListener();
   },
 
   componentDidUpdate: function() {
@@ -69,7 +80,7 @@ var Map = React.createClass({displayName: "Map",
 
   render: function() {
     return (
-      React.createElement("div", {id: "map", style: {position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}})
+      React.createElement("div", {id: "map", ref: "map", style: {position: "absolute", top: "0px", left: "0px", width: "100%", height: "100%"}})
     );
   }
 });
