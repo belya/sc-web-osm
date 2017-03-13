@@ -41,6 +41,10 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     fluxify.doAction('chooseObject', object);
   },
 
+  onMapClick: function(coordinates) {
+    fluxify.doAction('importObject', coordinates);
+  },
+
   //TODO remove hard-coded question
   onAgentParamsChange: function(params) {
     SCWeb.core.Main.doCommand(MapKeynodes.get('ui_menu_file_for_finding_persons'), [this.state.chosen.id]);
@@ -56,7 +60,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
   render: function() {
     return (
       React.createElement("div", null, 
-        React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick}), 
+        React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick, onMapClick: this.onMapClick}), 
         React.createElement("div", {className: "row", style: {margin: "10px"}}, 
           React.createElement("div", {className: "col-sm-5 well"}, 
             React.createElement("div", {className: "form-group"}, 

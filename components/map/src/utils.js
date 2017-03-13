@@ -1,8 +1,116 @@
 var MapUtils = {
+  SQUARE_SIDE: 0.0001,
+  doOSMQuery: function(query, callback) {
+    $.ajax({
+      method: 'POST',
+      url: "http://overpass-api.de/api/interpreter",
+      data: {
+        data: query
+      },
+      success: callback
+    })
+  },
+  getOSMQueryForCoordinates: function(coordinates) {
+    square = [
+      coordinates.lat - MapUtils.SQUARE_SIDE, 
+      coordinates.lng - MapUtils.SQUARE_SIDE, 
+      coordinates.lat + MapUtils.SQUARE_SIDE, 
+      coordinates.lng + MapUtils.SQUARE_SIDE
+    ].join(",");
+    return MapUtils.getOSMQuery(
+      "node(" + square + ");" +
+      "way(" + square + ");" +
+      "relation(" + square + ");"
+    );
+  },
+  getOSMQuery: function(query) {
+    query = query.trim();
+    if (/\[out:json\];/.test(query)) return query;
+    if (/^\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
+    return '[out:json];(' + query + '); out body; >; out skel qt;';
+  },
   empty: function(geojson) {
     return !geojson || !geojson.features || !geojson.features.length;
   },
-  extractor: function(contour, arc) {
+  importer: function(coordinates) {
+    var contour = MapStore.get().contour;
+    return {
+      import: function() {
+        MapUtils.doOSMQuery(MapUtils.getOSMQueryForCoordinates(coordinates), (data) => {
+          data.elements.map((element) => {
+            this.createNode(element);            
+          });
+        });
+      },
+      createNode: function(element) {
+        window.sctpClient.create_node(sc_type_const | sc_type_node)
+        .done((node) => {
+          element["ostisId"] = node;
+          $.when(this.importIdentifier(element), this.importQuery(element))
+          .done(() => {
+            console.log("Created");
+            this.addToContour(element);
+          })
+          .fail(() => {
+            console.log("Failed to import");
+          })
+        });
+      },
+      importIdentifier: function(element) {
+        var deferred = $.Deferred();
+        if (!element["tags"] || !element["tags"]["name"]) 
+          deferred.resolve()
+        else
+          window.sctpClient.create_link()
+          .done((link) => {
+            window.sctpClient.set_link_content(link, element["tags"]["name"])
+            .done(() => {
+              window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+              .done((arc) => {
+                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+                .done(() => {
+                  window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
+                  .done(() => {
+                    deferred.resolve();
+                  }).fail(deferred.reject)
+                }).fail(deferred.reject)
+              }).fail(deferred.reject)
+            }).fail(deferred.reject)
+          }).fail(deferred.reject);
+        return deferred.promise();
+      },
+      importQuery: function(element) {
+        var deferred = $.Deferred();
+        window.sctpClient.create_link()
+        .done((link) => {
+          window.sctpClient.set_link_content(link, element["type"] + "(" + element["id"] + ");")
+          .done(() => {
+            window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+            .done((arc) => {
+              window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_osm_query"), arc)
+              .done(() => {
+                deferred.resolve();
+              }).fail(deferred.reject)
+            }).fail(deferred.reject)
+          }).fail(deferred.reject)
+        }).fail(deferred.reject);
+        return deferred.promise();
+      },
+      addToContour: function(element) {
+        console.log(contour);
+        console.log(element["ostisId"]);
+        window.sctpClient.create_arc(sc_type_arc_pos_const_perm, contour, element["ostisId"])
+        .done(() => {
+          console.log("Added");
+        })
+        .fail(() => {
+          console.log("Can't add!");
+        })
+      }
+    }
+  },
+  extractor: function(arc) {
+    var contour = MapStore.get().contour;
     return {
       extract: function() {
         window.sctpClient.get_arc(arc)
@@ -160,22 +268,10 @@ var MapUtils = {
         });
       },
       extractGeoJSON: function(id, query) {
-        $.ajax({
-          method: 'POST',
-          url: "http://overpass-api.de/api/interpreter",
-          data: {
-            data: this.getOSMQuery(query)
-          },
-          success: function(data) {
-            fluxify.doAction('changeObject', {id: id, geojson: osmtogeojson(data)});
-          }
-        })  
+        MapUtils.doOSMQuery(MapUtils.getOSMQuery(query), function(data) {
+          fluxify.doAction('changeObject', {id: id, geojson: osmtogeojson(data)});
+        })
       },
-      getOSMQuery: function(query) {
-        if (/\[out:json\];/.test(query)) return query;
-        if (/\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
-        return '[out:json];(' + query + '); out body; >; out skel qt;';
-      }
     }
   }
 }

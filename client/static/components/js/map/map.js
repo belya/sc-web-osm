@@ -42,9 +42,14 @@ MapStore = {
       id: "MapStore",
       initialState: {
         objects: {},
-        chosen: null
+        chosen: null,
+        contour: null
       },
       actionCallbacks: {
+        importObject: function(updater, coordinates) {
+          var objects = Object.assign({}, this.objects);
+          MapUtils.importer(coordinates).import();
+        },
         changeObject: function(updater, object) {
           var objects = Object.assign({}, this.objects);
           objects[object.id] = Object.assign({}, objects[object.id], object);
@@ -58,6 +63,9 @@ MapStore = {
         },
         resetChosen: function(updater) {
           updater.set({chosen: null})
+        },
+        changeContour: function(updater, contour) {
+          updater.set({contour: contour})
         }
       }
     });
@@ -150,6 +158,7 @@ var Map = React.createClass({displayName: "Map",
     objects: React.PropTypes.array,
     chosen: React.PropTypes.object,
     onMarkerClick: React.PropTypes.func,
+    onMapClick: React.PropTypes.func
   },
 
   createMap: function() {
@@ -157,6 +166,13 @@ var Map = React.createClass({displayName: "Map",
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 17});
     this.map.addLayer(osm);
+  },
+
+  bindMapClickAction: function() {
+    this.map.on('click', (event) => {
+      if (event.originalEvent.ctrlKey)
+        this.props.onMapClick(event.latlng)
+    });
   },
 
   fixZoomControls: function() {
@@ -195,6 +211,7 @@ var Map = React.createClass({displayName: "Map",
 
   componentDidMount: function() {
     this.createMap();
+    this.bindMapClickAction();
     this.setInitialView();
     this.fixZoomControls();
   },
@@ -257,6 +274,10 @@ var MapInterface = React.createClass({displayName: "MapInterface",
     fluxify.doAction('chooseObject', object);
   },
 
+  onMapClick: function(coordinates) {
+    fluxify.doAction('importObject', coordinates);
+  },
+
   //TODO remove hard-coded question
   onAgentParamsChange: function(params) {
     SCWeb.core.Main.doCommand(MapKeynodes.get('ui_menu_file_for_finding_persons'), [this.state.chosen.id]);
@@ -272,7 +293,7 @@ var MapInterface = React.createClass({displayName: "MapInterface",
   render: function() {
     return (
       React.createElement("div", null, 
-        React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick}), 
+        React.createElement(Map, {objects: this.state.objects, chosen: this.state.chosen, onMarkerClick: this.onClick, onMapClick: this.onMapClick}), 
         React.createElement("div", {className: "row", style: {margin: "10px"}}, 
           React.createElement("div", {className: "col-sm-5 well"}, 
             React.createElement("div", {className: "form-group"}, 
@@ -390,10 +411,118 @@ var Timeline = React.createClass({displayName: "Timeline",
 
 /* --- src/utils.js --- */
 var MapUtils = {
+  SQUARE_SIDE: 0.0001,
+  doOSMQuery: function(query, callback) {
+    $.ajax({
+      method: 'POST',
+      url: "http://overpass-api.de/api/interpreter",
+      data: {
+        data: query
+      },
+      success: callback
+    })
+  },
+  getOSMQueryForCoordinates: function(coordinates) {
+    square = [
+      coordinates.lat - MapUtils.SQUARE_SIDE, 
+      coordinates.lng - MapUtils.SQUARE_SIDE, 
+      coordinates.lat + MapUtils.SQUARE_SIDE, 
+      coordinates.lng + MapUtils.SQUARE_SIDE
+    ].join(",");
+    return MapUtils.getOSMQuery(
+      "node(" + square + ");" +
+      "way(" + square + ");" +
+      "relation(" + square + ");"
+    );
+  },
+  getOSMQuery: function(query) {
+    query = query.trim();
+    if (/\[out:json\];/.test(query)) return query;
+    if (/^\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
+    return '[out:json];(' + query + '); out body; >; out skel qt;';
+  },
   empty: function(geojson) {
     return !geojson || !geojson.features || !geojson.features.length;
   },
-  extractor: function(contour, arc) {
+  importer: function(coordinates) {
+    var contour = MapStore.get().contour;
+    return {
+      import: function() {
+        MapUtils.doOSMQuery(MapUtils.getOSMQueryForCoordinates(coordinates), (data) => {
+          data.elements.map((element) => {
+            this.createNode(element);            
+          });
+        });
+      },
+      createNode: function(element) {
+        window.sctpClient.create_node(sc_type_const | sc_type_node)
+        .done((node) => {
+          element["ostisId"] = node;
+          $.when(this.importIdentifier(element), this.importQuery(element))
+          .done(() => {
+            console.log("Created");
+            this.addToContour(element);
+          })
+          .fail(() => {
+            console.log("Failed to import");
+          })
+        });
+      },
+      importIdentifier: function(element) {
+        var deferred = $.Deferred();
+        if (!element["tags"] || !element["tags"]["name"]) 
+          deferred.resolve()
+        else
+          window.sctpClient.create_link()
+          .done((link) => {
+            window.sctpClient.set_link_content(link, element["tags"]["name"])
+            .done(() => {
+              window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+              .done((arc) => {
+                window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_main_idtf"), arc)
+                .done(() => {
+                  window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("lang_ru"), link)
+                  .done(() => {
+                    deferred.resolve();
+                  }).fail(deferred.reject)
+                }).fail(deferred.reject)
+              }).fail(deferred.reject)
+            }).fail(deferred.reject)
+          }).fail(deferred.reject);
+        return deferred.promise();
+      },
+      importQuery: function(element) {
+        var deferred = $.Deferred();
+        window.sctpClient.create_link()
+        .done((link) => {
+          window.sctpClient.set_link_content(link, element["type"] + "(" + element["id"] + ");")
+          .done(() => {
+            window.sctpClient.create_arc(sc_type_arc_common | sc_type_const, element["ostisId"], link)
+            .done((arc) => {
+              window.sctpClient.create_arc(sc_type_arc_pos_const_perm, MapKeynodes.get("nrel_osm_query"), arc)
+              .done(() => {
+                deferred.resolve();
+              }).fail(deferred.reject)
+            }).fail(deferred.reject)
+          }).fail(deferred.reject)
+        }).fail(deferred.reject);
+        return deferred.promise();
+      },
+      addToContour: function(element) {
+        console.log(contour);
+        console.log(element["ostisId"]);
+        window.sctpClient.create_arc(sc_type_arc_pos_const_perm, contour, element["ostisId"])
+        .done(() => {
+          console.log("Added");
+        })
+        .fail(() => {
+          console.log("Can't add!");
+        })
+      }
+    }
+  },
+  extractor: function(arc) {
+    var contour = MapStore.get().contour;
     return {
       extract: function() {
         window.sctpClient.get_arc(arc)
@@ -551,22 +680,10 @@ var MapUtils = {
         });
       },
       extractGeoJSON: function(id, query) {
-        $.ajax({
-          method: 'POST',
-          url: "http://overpass-api.de/api/interpreter",
-          data: {
-            data: this.getOSMQuery(query)
-          },
-          success: function(data) {
-            fluxify.doAction('changeObject', {id: id, geojson: osmtogeojson(data)});
-          }
-        })  
+        MapUtils.doOSMQuery(MapUtils.getOSMQuery(query), function(data) {
+          fluxify.doAction('changeObject', {id: id, geojson: osmtogeojson(data)});
+        })
       },
-      getOSMQuery: function(query) {
-        if (/\[out:json\];/.test(query)) return query;
-        if (/\([^)]+\);/.test(query)) return '[out:json];' + query + 'out body; >; out skel qt;';
-        return '[out:json];(' + query + '); out body; >; out skel qt;';
-      }
     }
   }
 }
@@ -611,7 +728,8 @@ MapViewer.prototype.createStore = function() {
 };
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
-  if (added) MapUtils.extractor(contour, arc).extract();
+  fluxify.doAction('changeContour', contour);
+  if (added) MapUtils.extractor(arc).extract();
 };
 
 MapViewer.prototype.getQuestions = function() {

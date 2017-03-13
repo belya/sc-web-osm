@@ -3,6 +3,7 @@ var Map = React.createClass({displayName: "Map",
     objects: React.PropTypes.array,
     chosen: React.PropTypes.object,
     onMarkerClick: React.PropTypes.func,
+    onMapClick: React.PropTypes.func
   },
 
   createMap: function() {
@@ -10,6 +11,13 @@ var Map = React.createClass({displayName: "Map",
     var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 17});
     this.map.addLayer(osm);
+  },
+
+  bindMapClickAction: function() {
+    this.map.on('click', (event) => {
+      if (event.originalEvent.ctrlKey)
+        this.props.onMapClick(event.latlng)
+    });
   },
 
   fixZoomControls: function() {
@@ -48,6 +56,7 @@ var Map = React.createClass({displayName: "Map",
 
   componentDidMount: function() {
     this.createMap();
+    this.bindMapClickAction();
     this.setInitialView();
     this.fixZoomControls();
   },

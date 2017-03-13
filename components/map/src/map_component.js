@@ -37,7 +37,8 @@ MapViewer.prototype.createStore = function() {
 };
 
 MapViewer.prototype.eventStructUpdate = function(added, contour, arc) {
-  if (added) MapUtils.extractor(contour, arc).extract();
+  fluxify.doAction('changeContour', contour);
+  if (added) MapUtils.extractor(arc).extract();
 };
 
 MapViewer.prototype.getQuestions = function() {

@@ -9,9 +9,14 @@ MapStore = {
       id: "MapStore",
       initialState: {
         objects: {},
-        chosen: null
+        chosen: null,
+        contour: null
       },
       actionCallbacks: {
+        importObject: function(updater, coordinates) {
+          var objects = Object.assign({}, this.objects);
+          MapUtils.importer(coordinates).import();
+        },
         changeObject: function(updater, object) {
           var objects = Object.assign({}, this.objects);
           objects[object.id] = Object.assign({}, objects[object.id], object);
@@ -25,6 +30,9 @@ MapStore = {
         },
         resetChosen: function(updater) {
           updater.set({chosen: null})
+        },
+        changeContour: function(updater, contour) {
+          updater.set({contour: contour})
         }
       }
     });
